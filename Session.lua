@@ -1,23 +1,24 @@
 --| SERVICES:
 local HttpService = game:GetService("HttpService")
-	local RunService = game:GetService("RunService")
-	
-	if RunService:IsRunning() then
-		return
-	end
-	
+local RunService = game:GetService("RunService")
+
+if RunService:IsRunning() then
+	return
+end
+
 local StudioService = game:GetService("StudioService")
 local Selection = game:GetService("Selection")
 local lastActivity = os.time()
-	
+
 local toolbar = plugin:CreateToolbar("Session Logger")
- 
+
 local SessionBtn = toolbar:CreateButton("Session Logger", "prints your Session Data", "rbxassetid://5514776308")
 SessionBtn.ClickableWhenViewportHidden = true
 
 --| VARIABLES:
 
 local startTime = os.time()
+local totalInactivity
 
 local UniqeId = game:FindFirstChild("UniqeId",true)
 local createdTime, sessionData, sessions
@@ -47,7 +48,7 @@ end
 
 local function SerializeType(Value, Class)
 	local NewValue = ''
-
+	
 	if Class == 'string' then
 		-- Not using %q as it messes up the special characters fix
 		NewValue = ('"%s"'):format(Value:gsub('[%c%z]', SpecialCharacters))
@@ -60,7 +61,7 @@ local function SerializeType(Value, Class)
 	else -- thread, number, boolean, nil, ...
 		NewValue = tostring(Value)
 	end
-
+	
 	return NewValue
 end
 
@@ -69,15 +70,15 @@ local function TableToString(Table, IgnoredTables, Depth)
 	if IgnoredTables[Table] then
 		return '[Cyclic Table]'
 	end
-
+	
 	Depth = Depth or 0
 	Depth = Depth + 1
-
+	
 	IgnoredTables[Table] = true
 	local Tab = ('    '):rep(Depth)
 	local TrailingTab = ('    '):rep(Depth - 1)
 	local Result = '{'
-
+	
 	local LineTab = '\n' .. Tab
 	for Key, Value in next, Table do
 		local KeyClass, ValueClass = typeof(Key), typeof(Value)
@@ -89,11 +90,11 @@ local function TableToString(Table, IgnoredTables, Depth)
 		else
 			Key = '[' .. (KeyClass == 'table' and TableToString(Key, IgnoredTables, Depth):gsub('^[\n\r%s]*(.-)[\n\r%s]*$', '%1') or SerializeType(Key, KeyClass)) .. ']'
 		end
-
+		
 		Value = ValueClass == 'table' and TableToString(Value, IgnoredTables, Depth) or SerializeType(Value, ValueClass)
 		Result = Result .. LineTab .. Key .. ' = ' .. Value..","
 	end
-
+	
 	return Result .. '\n' .. TrailingTab .. '}'
 end
 
@@ -119,7 +120,6 @@ local function init()
 --	end
 --	
 --	sessionData.totalSessionsTime = totalSessionsTime;
-
 	--]]
 	
 	if #sessionData.sessions > 0 then
@@ -136,12 +136,21 @@ local function init()
 	activeScript = StudioService.ActiveScript
 	StudioService:GetPropertyChangedSignal("ActiveScript"):Connect(function()
 		if activeScript and StudioService.ActiveScript ~= activeScript then
---			print(("You have edited %s for"):format(activeScript:GetFullName()),ToTimerFormat(os.time() - activeTime))
+			--			print(("You have edited %s for"):format(activeScript:GetFullName()),ToTimerFormat(os.time() - activeTime))
 		end
 		activeTime = os.time()
 		activeScript = StudioService.ActiveScript
 		lastActivity = os.time()
 	end)
+end
+
+local function LogActivity()
+	local osTime = os.time()
+	
+	if osTime - lastActivity > 60 then
+		totalInactivity = (osTime - lastActivity)
+	end
+	lastActivity = os.time()
 end
 
 --| SCRIPTS:
@@ -164,10 +173,12 @@ SessionBtn.Click:Connect(function()
 end)
 
 game.Close:Connect(function()
+	LogActivity()
 	local osTime = os.time()
+	
 	local currentSession = {
 		Date = os.date(),
-		sessionTime = (osTime - startTime) - (osTime - lastActivity),
+		sessionTime = totalInactivity,
 		startTime = startTime,
 		endTime = osTime,
 	}
